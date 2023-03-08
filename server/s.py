@@ -27,26 +27,34 @@ def sayHello():
     print("----> The hello function was called")
 
 
+def parseFileName(data):
+    try:
+        return (True, data.split("-")[1][:-2])
+    except (IndexError):
+        return (False, "")
+
+
 # sample parser function. The job of this function is to take some input
 # data and search to see if a command is present in the text. If it finds a
 # command it will then need to extract the command.
-
 def parseInput(data, conn):
     global exit
 
     data = str(data)
 
-    if "<EXIT>" in data:
-        conn.close()
-        exit(1)
-
     # Checking for commands
     if "<GET-" in data:
         filename = data.split("-")[1][:-2]
-        with open(filename, "rb") as f:
-            conn.send(f.read())
-
-        print("sent the file")
+        is_success, filename = parseFileName(data)
+        if is_success:
+            try:
+                with open(filename, "rb") as f:
+                    conn.send(f.read())
+                    print("sent the file")
+            except (FileNotFoundError):
+                conn.send(bytes("[ERROR]:File does not exist", "UTF-8"))
+        else:
+            conn.send(bytes("[ERROR]:Invalid input", "UTF-8"))
 
     if "<SPLIT-" in data:
         filename = data.split("-")[1][:-2]
@@ -54,7 +62,7 @@ def parseInput(data, conn):
 
         with open(filename, mode="rb") as file:
             contents = file.read()
-            chunkSize = 100000
+            chunkSize = 80000
             numOfSegments = int(contents/chunkSize)
 
             os.makedirs(os.path.dirname(f"{filenameSplit[0]}/"), exist_ok=True)
@@ -76,7 +84,7 @@ def parseInput(data, conn):
                 pass
         try:
             os.rmdir(f"{filenameSplit[0]}/")
-        except (FileExistsError):
+        except (FileExistsError, FileNotFoundError):
             pass
 
     if "<HASH-" in data:
@@ -97,6 +105,18 @@ def parseInput(data, conn):
 
         print("sent the hash for '"+filename+"' :" + m.hexdigest())
 
+    if "<LIST-" in data:
+        directory = data.split("-")[1][:-2]
+        if len(directory) == 0:
+            directory = "."
+        dir = os.scandir(directory)
+        for entry in dir:
+            if entry.is_file():
+                print(entry.name)
+                conn.send(bytes(entry.name, "UTF-8"))
+
+        print(f"sent the directory list for {directory}")
+
 
 # we a new thread is started from an incoming connection
 # the manageConnection funnction is used to take the input
@@ -104,15 +124,22 @@ def parseInput(data, conn):
 # the data that came in from a client is added to the buffer.
 
 def manageConnection(conn, addr):
-    global buffer
+    data = b''
     print('Connected by', addr)
+    while str(data) != "'<EXIT>'":
+        data = conn.recv(1024)
 
-    data = conn.recv(1024)
+        # Calling the parser, passing the connection
+        parseInput(str(data), conn)
+        conn.send(b' ')
 
-    parseInput(str(data), conn)  # Calling the parser, passing the connection
+        print("rec:" + str(data))
 
-    print("rec:" + str(data))
-    buffer += str(data)
+        if "<EXIT>" in str(data):
+            conn.send(b'<EXIT>')
+    conn.close()
+    exit(1)
+    print('Client disconnected from', addr)
 
 
 while True:
