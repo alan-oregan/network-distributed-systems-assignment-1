@@ -2,11 +2,7 @@ import socket
 import threading
 import hashlib
 import os
-
-print("Hi!, This is the server :)")
-
-# from time import gmtime, strftime
-# import time
+import time
 
 HOST = '0.0.0.0'
 PORT = 50007
@@ -21,16 +17,62 @@ s.bind((HOST, PORT))
 buffer = ""
 
 
-# custom say hello command
+# ================= command functions =================
 
-def sayHello():
-    print("----> The hello function was called")
+def sendFile(filename: str):
+    with open(filename, "rb") as f:
+        conn.send(f.read())
 
 
-def parseFileName(data):
+def splitFile(filename: str):
+    filenameSplit = filename.split(".")
+
+    with open(filename, mode="rb") as file:
+        contents = file.read()
+        chunkSize = 80000
+        numOfSegments = int(len(contents)/chunkSize)
+
+        os.makedirs(os.path.dirname(f"{filenameSplit[0]}/"), exist_ok=True)
+        for i in range(1, numOfSegments+1):
+            f = open(f"{filenameSplit[0]}/{i}.{filenameSplit[1]}", 'wb+')
+
+            if (i != numOfSegments):
+                f.write(contents[chunkSize*i - chunkSize: chunkSize*i])
+            else:
+                f.write(contents[chunkSize*i - chunkSize:])
+            f.close()
+
+
+def sendHash(filename: str):
+    with open(filename, 'rb') as f:
+        content = f.read()
+
+    m = hashlib.sha256()
+    m.update(content)
+    conn.send(m.digest())
+    return m.hexdigest()
+
+# ================= util functions =================
+
+
+def logEvent(message: str, type: str = "EVENT"):
+    timestamp = time.strftime("%d/%m/%Y %H:%M:%S", time.gmtime())
+    print(f"[{timestamp} {type.upper()}] {message}".rjust(2))
+
+
+def raiseError(message: str, type: str = "ERROR"):
+    logEvent(message, type)
+    conn.send(bytes(f"[{type}]:{message}", "UTF-8"))
+
+
+def parseFilename(data):
     try:
-        return (True, data.split("-")[1][:-2])
+        filename = data.split("-")[1][:-1]
+        return (True, filename)
     except (IndexError):
+        raiseError(
+            "Invalid filename please use structure <COMMAND-FILENAME.EXTENSION>"
+        )
         return (False, "")
 
 
@@ -38,110 +80,87 @@ def parseFileName(data):
 # data and search to see if a command is present in the text. If it finds a
 # command it will then need to extract the command.
 def parseInput(data, conn):
-    global exit
-
-    data = str(data)
+    data = data
 
     # Checking for commands
     if "<GET-" in data:
-        filename = data.split("-")[1][:-2]
-        is_success, filename = parseFileName(data)
+        is_success, filename = parseFilename(data)
         if is_success:
             try:
-                with open(filename, "rb") as f:
-                    conn.send(f.read())
-                    print("sent the file")
+                sendFile(filename)
+                logEvent(f"Sent {filename} to client")
             except (FileNotFoundError):
-                conn.send(bytes("[ERROR]:File does not exist", "UTF-8"))
-        else:
-            conn.send(bytes("[ERROR]:Invalid input", "UTF-8"))
+                raiseError(f"File '{filename}'does not exist")
 
     if "<SPLIT-" in data:
-        filename = data.split("-")[1][:-2]
-        filenameSplit = filename.split(".")
+        is_success, filename = parseFilename(data)
 
-        with open(filename, mode="rb") as file:
-            contents = file.read()
-            chunkSize = 80000
-            numOfSegments = int(contents/chunkSize)
+        if is_success:
+            splitFile(filename)
 
-            os.makedirs(os.path.dirname(f"{filenameSplit[0]}/"), exist_ok=True)
-            for i in range(1, numOfSegments+1):
-                f = open(f"{filenameSplit[0]}/{i}.{filenameSplit[1]}", 'wb+')
-                if (i != numOfSegments):
-                    f.write(contents[chunkSize*i - chunkSize: chunkSize*i])
-                else:
-                    f.write(contents[chunkSize*i - chunkSize:])
-                f.close()
+    if "<DELETE-" in data:
+        is_success, filename = parseFilename(data)
 
-    if "<DEL-" in data:
-        filename = data.split("-")[1][:-2]
-        filenameSplit = filename.split(".")
-        for i in range(1, 11):
+        if is_success:
+            filenameSplit = filename.split(".")
+            for i in range(1, 11):
+                try:
+                    os.remove(f"{filenameSplit[0]}/{i}.{filenameSplit[1]}")
+                except (FileNotFoundError):
+                    pass
             try:
-                os.remove(f"{filenameSplit[0]}/{i}.{filenameSplit[1]}")
-            except (FileNotFoundError):
+                os.rmdir(f"{filenameSplit[0]}/")
+            except (FileExistsError, FileNotFoundError):
                 pass
-        try:
-            os.rmdir(f"{filenameSplit[0]}/")
-        except (FileExistsError, FileNotFoundError):
-            pass
 
     if "<HASH-" in data:
-        filename = data.split("-")[1][:-2]
+        is_success, filename = parseFilename(data)
 
-        with open(filename, 'rb') as f:
-            content = f.read()
-
-        m = hashlib.sha256()
-
-        # get the hash
-
-        m.update(content)
-        res = m.digest()
-
-        print(res)
-        conn.send(res)
-
-        print("sent the hash for '"+filename+"' :" + m.hexdigest())
+        if is_success:
+            hash = sendHash(filename)
+            logEvent(f"Sent the file hash for {filename}:{hash}")
 
     if "<LIST-" in data:
-        directory = data.split("-")[1][:-2]
-        if len(directory) == 0:
-            directory = "."
+        is_success, directory = parseFilename(data)
+        directory = "./" + directory + "/"
         dir = os.scandir(directory)
-        for entry in dir:
-            if entry.is_file():
-                print(entry.name)
-                conn.send(bytes(entry.name, "UTF-8"))
+        conn.send(
+            bytes(
+                " ".join([entry.name for entry in dir if entry.is_file()]),
+                "UTF-8"
+            )
+        )
 
-        print(f"sent the directory list for {directory}")
+        logEvent(f"sent the directory list for {directory}")
 
 
 # we a new thread is started from an incoming connection
-# the manageConnection funnction is used to take the input
+# the manageConnection function is used to take the input
 # and print it out on the server
 # the data that came in from a client is added to the buffer.
 
 def manageConnection(conn, addr):
-    data = b''
-    print('Connected by', addr)
-    while str(data) != "'<EXIT>'":
-        data = conn.recv(1024)
+    logEvent(f"Client Connected on port {addr[1]}", "connected")
 
-        # Calling the parser, passing the connection
-        parseInput(str(data), conn)
+    data = ""
+    while "<EXIT>" not in data:
+        data = conn.recv(1024).decode("UTF-8")
+
+        logEvent(data, "RECEIVED")
+
+        parseInput(data, conn)
+
         conn.send(b' ')
 
-        print("rec:" + str(data))
+        if "<EXIT>" in data:
+            conn.send(b'[END]')
+            conn.close()
 
-        if "<EXIT>" in str(data):
-            conn.send(b'<EXIT>')
-    conn.close()
+    logEvent(f"Client disconnected from port {addr[1]}", "disconnected")
     exit(1)
-    print('Client disconnected from', addr)
 
 
+logEvent("Hi!, This is the server :)", "started")
 while True:
     s.listen(1)
     conn, addr = s.accept()

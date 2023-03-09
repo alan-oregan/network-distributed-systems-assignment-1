@@ -18,28 +18,36 @@ while True:
 
     # handle response
 
+    # handle exit
+    if text == "<EXIT>":
+        break
+
     # if error then parse error text
-    if "[ERROR]" in str(data):
+    if "[ERROR]" in data.decode("UTF-8"):
         try:
-            print(str(data).split(":")[1][:-1])
+            print(data.decode("UTF-8").split(":")[1][:-1])
         except (IndexError):
-            print(str(data))
+            print(data.decode("UTF-8"))
         finally:
             continue
 
     # handling successful response depending on request
     if "<GET-" in text:
         filename = text.split("-")[1][:-1]
-        filenameSplit = filename.split(".")
 
-        with open(f"{filenameSplit[0]}.rec.{filenameSplit[1]}", "wb+") as f:
+        with open(filename, "wb+") as f:
             f.write(data)
-        print(f"added data to {filenameSplit[0]}.rec.{filenameSplit[1]}")
+        print(f"added data to {filename}")
 
     if "<HASH-" in text:
         print(data.hex())
+
+    if "<LIST-" in text:
+        print(data.decode("UTF-8"))
 
     if data == "<EXIT>":
         break
 
 s.close()
+
+input("Connection closed...")
