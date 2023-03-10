@@ -32,7 +32,7 @@ def parseInput(request: str, conn: socket):
         if is_success:
             splitFiles = command.split(filename)
             utility.clientEvent(conn,
-                                f"Split {filename} into {splitFiles}"
+                                f"Split {filename} into directory: \n{splitFiles}"
                                 )
         return
 
@@ -42,7 +42,7 @@ def parseInput(request: str, conn: socket):
         if is_success:
             deletedFiles = command.delete(filename)
             utility.clientEvent(conn,
-                                f"Deleted {deletedFiles}",
+                                f"Deleted \n{deletedFiles}",
                                 "Response"
                                 )
         return
@@ -53,7 +53,7 @@ def parseInput(request: str, conn: socket):
         if is_success:
             hash = command.hash(filename)
             utility.clientEvent(conn,
-                                f"The hash for {filename} is {hash}",
+                                f"The hash for {filename} is: \n{hash}",
                                 "Response"
                                 )
         return

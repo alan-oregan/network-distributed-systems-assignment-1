@@ -9,15 +9,15 @@ while True:
 
     s.sendall((text).encode())
 
+    # handle exit
+    if text == "<EXIT>":
+        break
+
     # receives 80KB
     if len(text) > 0:
         data = s.recv(utility.MAX_RECEIVE_BYTES)
 
     # handle response
-
-    # handle exit
-    if text == "<EXIT>":
-        break
 
     # if error then parse error text
     try:
@@ -36,14 +36,6 @@ while True:
         with open(filename, "wb+") as f:
             f.write(data)
         print(f"added data to {filename}")
-        continue
-
-    if "<HASH-" in text:
-        print(data.hex())
-        continue
-
-    if "<LIST-" in text:
-        print(data.decode(utility.ENCODING))
         continue
 
     # if unknown format try to parse data as text
