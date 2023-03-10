@@ -21,6 +21,7 @@ def split(filepath: str):
     source = open(filepath, mode="rb")
 
     contents = source.read()
+    source.close()
     splitDirectory = f"{root}/"
     # gets the number of segments with a default of at least 1
     numOfSegments = max(
@@ -30,10 +31,10 @@ def split(filepath: str):
 
     os.makedirs(os.path.dirname(splitDirectory), exist_ok=True)
 
-    for i in range(1, numOfSegments+1):
+    for i in range(1, numOfSegments+2):
         segment = open(f"{splitDirectory}{i}{extension}", 'wb+')
 
-        if (i > numOfSegments):
+        if (i <= numOfSegments):
             segment.write(
                 contents[utility.MAX_SEND_BYTES*i -
                          utility.MAX_SEND_BYTES: utility.MAX_SEND_BYTES*i]
@@ -45,8 +46,6 @@ def split(filepath: str):
             )
 
         segment.close()
-
-    source.close()
     return root
 
 

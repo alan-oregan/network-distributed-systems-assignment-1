@@ -22,14 +22,10 @@ while True:
     # if error then parse error text
     try:
         if "[ERROR]" in data.decode(utility.ENCODING):
-            try:
-                print(data.decode(utility.ENCODING).split(":")[1][:-1])
-            except (IndexError):
-                print(data.decode(utility.ENCODING))
-            finally:
-                continue
+            print(data.decode(utility.ENCODING))
+            continue
 
-    # if exception then not an error response
+    # ignore if data is not in text encoding
     except (UnicodeDecodeError):
         pass
 
@@ -49,6 +45,14 @@ while True:
     if "<LIST-" in text:
         print(data.decode(utility.ENCODING))
         continue
+
+    # if unknown format try to parse data as text
+    try:
+        print(data.decode(utility.ENCODING))
+
+    # ignore if data is not in text encoding
+    except (UnicodeDecodeError):
+        pass
 
 s.close()
 

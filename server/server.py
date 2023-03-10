@@ -20,49 +20,56 @@ def parseInput(request: str, conn: socket):
     # Checking for commands
 
     if "<GET-" in request:
-        is_success, filename = utility.parsePath(request)
+        is_success, filename = utility.parseFilePath(conn, request)
         if is_success:
             fileBytes = command.get(filename)
             conn.send(fileBytes)
-            utility.serverLog(f"Sent {filename} to client")
+            utility.serverLog(f"Sent {filename} to Client")
         return
 
     if "<SPLIT-" in request:
-        is_success, filename = utility.parsePath(request)
+        is_success, filename = utility.parseFilePath(conn, request)
         if is_success:
             splitFiles = command.split(filename)
-            conn.send(bytes(splitFiles, utility.ENCODING))
-            utility.serverLog(f"Split {filename} into {splitFiles}")
+            utility.clientEvent(conn,
+                                f"Split {filename} into {splitFiles}"
+                                )
         return
 
     if "<DELETE-" in request:
-        is_success, filename = utility.parsePath(request)
+        is_success, filename = utility.parseFilePath(conn, request)
 
         if is_success:
             deletedFiles = command.delete(filename)
-            utility.clientEvent(
-                f"Deleted {deletedFiles}", "Response")
+            utility.clientEvent(conn,
+                                f"Deleted {deletedFiles}",
+                                "Response"
+                                )
         return
 
     if "<HASH-" in request:
-        is_success, filename = utility.parsePath(request)
+        is_success, filename = utility.parseFilePath(conn, request)
 
         if is_success:
             hash = command.hash(filename)
-            utility.clientEvent(
-                f"The hash for {filename} is {hash}", "Response")
+            utility.clientEvent(conn,
+                                f"The hash for {filename} is {hash}",
+                                "Response"
+                                )
         return
 
     if "<LIST-" in request:
-        is_success, directory = utility.parsePath(request)
+        is_success, directory = utility.parseDirectoryPath(conn, request)
         if is_success:
             response = command.list(directory)
-            utility.clientEvent(
-                f"Files in directory {directory} are \n{response}", "Response")
+            utility.clientEvent(conn,
+                                f"Files in directory {directory} are: \n{response}",
+                                "Response"
+                                )
         return
 
     # default response
-    utility.clientEvent(f"Unknown command {request}", "ERROR")
+    utility.clientEvent(conn, f"Unknown command {request}", "ERROR")
 
 
 def manageConnection(conn: socket, addr):
@@ -77,11 +84,10 @@ def manageConnection(conn: socket, addr):
         # to a UTF-8 string
         request = conn.recv(utility.MAX_RECEIVE_BYTES).decode("UTF-8")
 
-        utility.serverLog(request, "RECEIVED")
+        utility.serverLog(
+            f"{request} from client on port {addr[1]}", "RECEIVED")
 
         parseInput(request, conn)
-
-        conn.send(b' ')
 
         if "<EXIT>" in request:
             conn.send(b'[END]')
