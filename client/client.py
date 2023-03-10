@@ -1,11 +1,8 @@
-# Echo client program
 import socket
-
-HOST = '127.0.0.1'    # The remote host
-PORT = 50007          # The same port as used by the server
+import utility
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((HOST, PORT))
+s.connect((utility.HOST, utility.PORT))
 
 while True:
     text = input("Command>")
@@ -14,7 +11,7 @@ while True:
 
     # receives 80KB
     if len(text) > 0:
-        data = s.recv(80000)
+        data = s.recv(utility.MAX_RECEIVE_BYTES)
 
     # handle response
 
@@ -23,13 +20,18 @@ while True:
         break
 
     # if error then parse error text
-    if "[ERROR]" in data.decode("UTF-8"):
-        try:
-            print(data.decode("UTF-8").split(":")[1][:-1])
-        except (IndexError):
-            print(data.decode("UTF-8"))
-        finally:
-            continue
+    try:
+        if "[ERROR]" in data.decode(utility.ENCODING):
+            try:
+                print(data.decode(utility.ENCODING).split(":")[1][:-1])
+            except (IndexError):
+                print(data.decode(utility.ENCODING))
+            finally:
+                continue
+
+    # if exception then not an error response
+    except (UnicodeDecodeError):
+        pass
 
     # handling successful response depending on request
     if "<GET-" in text:
@@ -38,15 +40,15 @@ while True:
         with open(filename, "wb+") as f:
             f.write(data)
         print(f"added data to {filename}")
+        continue
 
     if "<HASH-" in text:
         print(data.hex())
+        continue
 
     if "<LIST-" in text:
-        print(data.decode("UTF-8"))
-
-    if data == "<EXIT>":
-        break
+        print(data.decode(utility.ENCODING))
+        continue
 
 s.close()
 
