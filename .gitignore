@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+test*
+!tests.py
+
+*.mp3
+!britney.mp3
